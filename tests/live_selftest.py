@@ -50,7 +50,9 @@ def main():
         check("首页能打开且是 taskboard 页面", "taskboard" in page)
 
         res = http.post(BASE + "/api/login", json={"username": "admin", "password": "admin123"})
-        check("默认账号登录成功", res.status_code == 200, res.text[:120])
+        login_shown = dict(res.json()) if res.status_code == 200 else {}
+        login_shown["token"] = "<redacted>"
+        check("默认账号登录成功", res.status_code == 200, str(login_shown)[:120])
         data = res.json()
         check("首次登录提示改密", data["must_change_password"] is True)
         h = {"Authorization": f"Bearer {data['token']}"}

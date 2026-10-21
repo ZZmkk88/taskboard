@@ -1,5 +1,7 @@
 """Automated tests for taskboard. Run: .venv/bin/python -m pytest tests/ -q"""
+import hashlib
 import os
+import sqlite3
 import tempfile
 
 import pytest
@@ -105,6 +107,24 @@ def test_change_password_roundtrip(client, auth):
     )
     assert res.status_code == 200
     assert client.get("/api/me", headers=auth).status_code == 200
+
+
+def test_session_tokens_stored_hashed(client):
+    data = do_login(client)
+    token = data["token"]
+    conn = sqlite3.connect(os.environ["TASKBOARD_DB_PATH"])
+    try:
+        stored = {r[0] for r in conn.execute("SELECT token FROM sessions").fetchall()}
+    finally:
+        conn.close()
+    assert stored, "sessions 表应有记录"
+    assert token not in stored, "明文令牌不应落库"
+    assert hashlib.sha256(token.encode("utf-8")).hexdigest() in stored
+    headers = {"Authorization": f"Bearer {token}"}
+    # 哈希入库不影响正常使用与退出
+    assert client.get("/api/me", headers=headers).status_code == 200
+    assert client.post("/api/logout", headers=headers).status_code == 200
+    assert client.get("/api/me", headers=headers).status_code == 401
 
 
 def test_change_password_revokes_other_sessions(client, auth):

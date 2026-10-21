@@ -51,7 +51,7 @@
   .colHead .t{font-weight:700;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .colHead .cnt{background:#fff;border-radius:999px;font-size:12px;color:var(--ink2);padding:1px 8px}
   .colHead button{padding:2px 7px;font-size:12px}
-  .cardList{display:flex;flex-direction:column;gap:8px;min-height:12px}
+  .cardList{display:flex;flex-direction:column;gap:8px;min-height:64px}
   .card{background:var(--card);border-radius:10px;padding:10px 11px;box-shadow:0 1px 3px rgba(20,35,50,.13);cursor:grab}
   .card.dragging{opacity:.45}
   .card .ttl{font-size:14px;font-weight:600;line-height:1.35;word-break:break-word}
@@ -239,8 +239,9 @@ function localDay(){
 function dueChip(card){
   if(!card.due_date) return "";
   const today = localDay();
-  let cls="due", label="📅 "+card.due_date.slice(5);
-  if(card.due_date<today){ cls+=" overdue"; label="⚠ 已逾期 "+card.due_date.slice(5); }
+  const d=esc(card.due_date.slice(5));
+  let cls="due", label="📅 "+d;
+  if(card.due_date<today){ cls+=" overdue"; label="⚠ 已逾期 "+d; }
   else if(card.due_date===today){ cls+=" today"; label="📅 今天到期"; }
   return `<span class="${cls}">${label}</span>`;
 }
@@ -288,9 +289,10 @@ function bindBoardEvents(){
     const colId=+colEl.dataset.col;
     colEl.querySelectorAll("[data-cact]").forEach(btn=>btn.onclick=()=>columnAction(colId,btn.dataset.cact));
     const list=colEl.querySelector(".cardList");
-    list.addEventListener("dragover",e=>{ e.preventDefault(); colEl.classList.add("dropHint"); });
-    list.addEventListener("dragleave",()=>colEl.classList.remove("dropHint"));
-    list.addEventListener("drop",async e=>{
+    // 拖拽投放绑在整列上：列头、空列留白、加卡按钮处放下都算数
+    colEl.addEventListener("dragover",e=>{ e.preventDefault(); colEl.classList.add("dropHint"); });
+    colEl.addEventListener("dragleave",e=>{ if(!colEl.contains(e.relatedTarget)) colEl.classList.remove("dropHint"); });
+    colEl.addEventListener("drop",async e=>{
       e.preventDefault(); colEl.classList.remove("dropHint");
       const cardId=+e.dataTransfer.getData("text/plain");
       if(!cardId) return;

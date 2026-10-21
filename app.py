@@ -211,7 +211,7 @@ def current_user(request: Request) -> sqlite3.Row:
         row = conn.execute(
             "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id"
             " WHERE s.token = ? AND s.expires_at > ?",
-            (token, time.time()),
+            (_token_hash(token), time.time()),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
@@ -237,7 +237,7 @@ def login(body: LoginIn):
         token = secrets.token_urlsafe(32)
         conn.execute(
             "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-            (token, user["id"], time.time() + TOKEN_TTL_SECONDS),
+            (_token_hash(token), user["id"], time.time() + TOKEN_TTL_SECONDS),
         )
         conn.commit()
         return {
@@ -254,11 +254,16 @@ def logout(request: Request, user: sqlite3.Row = Depends(current_user)):
     token = request.headers.get("Authorization", "")[len("Bearer "):].strip()
     conn = get_db()
     try:
-        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.execute("DELETE FROM sessions WHERE token = ?", (_token_hash(token),))
         conn.commit()
         return {"ok": True}
     finally:
         conn.close()
+
+
+def _token_hash(token: str) -> str:
+    """会话令牌入库前先做 SHA-256：库文件泄露时无法直接拿去冒充在线会话。"""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _bearer_token(request: Request) -> str:
@@ -292,7 +297,7 @@ def change_password(body: ChangePasswordIn, request: Request, user: sqlite3.Row 
         if current_token:
             conn.execute(
                 "DELETE FROM sessions WHERE user_id = ? AND token != ?",
-                (user["id"], current_token),
+                (user["id"], _token_hash(current_token)),
             )
         conn.commit()
         return {"ok": True}
