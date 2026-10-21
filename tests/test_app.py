@@ -97,13 +97,37 @@ def test_change_password_roundtrip(client, auth):
     assert res.status_code == 200
     data = do_login(client, "newpass123")
     assert data["must_change_password"] is False
-    # restore the original password for the remaining tests
+    # 用最初那个（仍有效的）会话把密码改回去，模块级 auth 夹具才能继续用
     res = client.post(
         "/api/change-password",
         json={"old_password": "newpass123", "new_password": "admin123"},
-        headers={"Authorization": f"Bearer {data['token']}"},
+        headers=auth,
     )
     assert res.status_code == 200
+    assert client.get("/api/me", headers=auth).status_code == 200
+
+
+def test_change_password_revokes_other_sessions(client, auth):
+    other = do_login(client)["token"]
+    other_headers = {"Authorization": f"Bearer {other}"}
+    assert client.get("/api/me", headers=other_headers).status_code == 200
+    res = client.post(
+        "/api/change-password",
+        json={"old_password": "admin123", "new_password": "tmppass123"},
+        headers=auth,
+    )
+    assert res.status_code == 200
+    # 其他会话已失效，当前会话仍可用
+    assert client.get("/api/me", headers=other_headers).status_code == 401
+    assert client.get("/api/me", headers=auth).status_code == 200
+    # 改回去，同样用当前会话，它自己不受影响
+    res = client.post(
+        "/api/change-password",
+        json={"old_password": "tmppass123", "new_password": "admin123"},
+        headers=auth,
+    )
+    assert res.status_code == 200
+    assert client.get("/api/me", headers=auth).status_code == 200
 
 
 # --------------------------------------------------------------- boards ----
