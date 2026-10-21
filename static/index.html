@@ -161,7 +161,7 @@ document.getElementById("btnLogout").addEventListener("click", async ()=>{ try{a
 document.getElementById("btnPwd").addEventListener("click", ()=>{
   openModal(`<h3>修改密码</h3>
     <label>旧密码</label><input id="pwdOld" type="password">
-    <label>新密码（至少 6 位）</label><input id="pwdNew" type="password">
+    <label>新密码（6–1024 位）</label><input id="pwdNew" type="password">
     <div class="row"><button onclick="closeModal()">取消</button><button class="primary" id="pwdSave">保存</button></div>`);
   document.getElementById("pwdSave").onclick=async()=>{
     try{ await post("/api/change-password",{old_password:val("pwdOld"),new_password:val("pwdNew")}); closeModal(); toast("密码已修改"); }
@@ -233,6 +233,12 @@ document.getElementById("btnAddColumn").addEventListener("click", ()=>{
 /* ---------------- board rendering ---------------- */
 function localDay(){
   const d=new Date();
+  const m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  return d.getFullYear()+"-"+m+"-"+dd;
+}
+function localDayOf(iso){
+  const d=new Date(iso);
+  if(isNaN(d)) return "";
   const m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
   return d.getFullYear()+"-"+m+"-"+dd;
 }
@@ -395,7 +401,7 @@ document.getElementById("btnArchived").addEventListener("click", async ()=>{
   let items=[];
   try{ items=await api(`/api/boards/${current.id}/archived`); }catch(ex){ toast(ex.message); return; }
   openModal(`<h3>归档箱 · ${esc(current.name)}</h3>
-    ${items.length? items.map(k=>`<div class="archItem"><div class="t">${esc(k.title)}<div class="c">原列：${esc(k.column_title)} · 归档于 ${esc((k.updated_at||"").slice(0,10))}</div></div>
+    ${items.length? items.map(k=>`<div class="archItem"><div class="t">${esc(k.title)}<div class="c">原列：${esc(k.column_title)} · 归档于 ${esc(localDayOf(k.updated_at))}</div></div>
       <button data-restore="${k.id}">恢复</button><button class="danger" data-adel="${k.id}">删除</button></div>`).join("")
       : `<div class="empty">归档箱是空的</div>`}
     <div class="row"><button onclick="closeModal()">关闭</button></div>`);

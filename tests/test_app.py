@@ -127,6 +127,44 @@ def test_session_tokens_stored_hashed(client):
     assert client.get("/api/me", headers=headers).status_code == 401
 
 
+def test_initial_password_validation():
+    appmod._validate_initial_password("ok123456")
+    for bad in ("", "   ", "x" * 1025):
+        with pytest.raises(SystemExit):
+            appmod._validate_initial_password(bad)
+
+
+def test_archived_card_rejects_put(client, auth):
+    board = make_board(client, auth, "归档拒改")
+    todo = col_by_title(board, "待办")
+    card = add_card(client, auth, todo["id"], title="会被归档")
+    body = {"title": "改一下", "description": "", "tag": "", "tag_color": "blue", "due_date": ""}
+    assert client.put(f"/api/cards/{card['id']}", json=body, headers=auth).status_code == 200
+    assert client.post(f"/api/cards/{card['id']}/archive", headers=auth).status_code == 200
+    res = client.put(f"/api/cards/{card['id']}", json=body, headers=auth)
+    assert res.status_code == 400
+
+
+def test_change_password_same_rejected(client, auth):
+    res = client.post(
+        "/api/change-password",
+        json={"old_password": "admin123", "new_password": "admin123"},
+        headers=auth,
+    )
+    assert res.status_code == 400
+    # 正常改密不受影响
+    assert client.post(
+        "/api/change-password",
+        json={"old_password": "admin123", "new_password": "tmppass1"},
+        headers=auth,
+    ).status_code == 200
+    assert client.post(
+        "/api/change-password",
+        json={"old_password": "tmppass1", "new_password": "admin123"},
+        headers=auth,
+    ).status_code == 200
+
+
 def test_change_password_revokes_other_sessions(client, auth):
     other = do_login(client)["token"]
     other_headers = {"Authorization": f"Bearer {other}"}

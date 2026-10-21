@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
@@ -129,6 +130,16 @@ _DUMMY_SALT = "0" * 32
 _DUMMY_HASH = hash_password("dummy-password", _DUMMY_SALT)
 
 
+def _validate_initial_password(pw: str) -> None:
+    """默认口令入库前校验：空串和超长都直接拒绝并说明原因，不静默写入。"""
+    if not pw or not pw.strip():
+        print("错误：TB_INITIAL_PASSWORD 不能为空（未设置初始口令）", file=sys.stderr)
+        raise SystemExit(2)
+    if len(pw) > MAX_PASSWORD:
+        print(f"错误：TB_INITIAL_PASSWORD 超过 {MAX_PASSWORD} 位", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def init_db() -> None:
     conn = get_db()
     try:
@@ -177,6 +188,7 @@ def init_db() -> None:
         )
         row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
         if row["c"] == 0:
+            _validate_initial_password(INITIAL_PASSWORD)
             salt = secrets.token_hex(16)
             conn.execute(
                 "INSERT INTO users (username, password_hash, salt, must_change_password, created_at)"
@@ -294,6 +306,8 @@ def change_password(body: ChangePasswordIn, request: Request, user: sqlite3.Row 
         hash_password(body.old_password, user["salt"]), user["password_hash"]
     ):
         raise HTTPException(status_code=400, detail="旧密码不正确")
+    if body.new_password == body.old_password:
+        raise HTTPException(status_code=400, detail="新密码不能和旧密码相同")
     salt = secrets.token_hex(16)
     current_token = _bearer_token(request)
     conn = get_db()
@@ -692,6 +706,8 @@ def update_card(card_id: int, body: CardIn, user: sqlite3.Row = Depends(current_
     conn = get_db()
     try:
         card = _get_own_card(conn, card_id, user["id"])
+        if card["is_archived"]:
+            raise HTTPException(status_code=400, detail="已归档的卡片不能修改，请先恢复")
         conn.execute(
             "UPDATE cards SET title = ?, description = ?, tag = ?, tag_color = ?,"
             " due_date = ?, updated_at = ? WHERE id = ?",
@@ -857,4 +873,10 @@ def index():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=HOST, port=int(os.environ.get("PORT", "8000")))
+    port_raw = os.environ.get("PORT", "8000")
+    try:
+        port = int(port_raw)
+    except ValueError:
+        print(f"错误：PORT 环境变量必须是数字，当前值 {port_raw!r}", file=sys.stderr)
+        raise SystemExit(2)
+    uvicorn.run(app, host=HOST, port=port)
