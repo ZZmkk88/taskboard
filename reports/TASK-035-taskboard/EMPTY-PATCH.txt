@@ -1,0 +1,1 @@
+WARNING: fix-report.md exists but the working tree is clean - the agent claimed fixes yet nothing changed (edits were reverted or never applied).
