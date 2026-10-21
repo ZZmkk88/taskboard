@@ -57,6 +57,9 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.url.path.startswith("/api/"):
+        # 接口返回不进任何缓存：令牌在请求头里，退出后也不留可复读的响应
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -73,7 +76,7 @@ def iso(dt: datetime) -> str:
 
 
 def _clean_text(value: str, max_len: int, label: str) -> str:
-    value = (value or "").strip()
+    value = (value or "").replace("\x00", "").strip()
     if not value:
         raise HTTPException(status_code=400, detail=f"{label}不能为空")
     if len(value) > max_len:
@@ -175,6 +178,8 @@ def init_db() -> None:
                 " VALUES (?, ?, ?, 1, ?)",
                 (INITIAL_USERNAME, hash_password(INITIAL_PASSWORD, salt), salt, iso(utcnow())),
             )
+        # 顺手清掉过期会话行（查询时本来就过滤，这里只是防止表无限变长）
+        conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (time.time(),))
         conn.commit()
     finally:
         conn.close()
@@ -612,10 +617,10 @@ def delete_column(column_id: int, user: sqlite3.Row = Depends(current_user)):
 
 def _clean_card_fields(body: CardIn) -> dict:
     title = _clean_text(body.title, MAX_CARD_TITLE, "卡片标题")
-    description = (body.description or "").strip()
+    description = (body.description or "").replace("\x00", "").strip()
     if len(description) > MAX_CARD_DESC:
         raise HTTPException(status_code=400, detail="卡片描述太长了")
-    tag = (body.tag or "").strip()
+    tag = (body.tag or "").replace("\x00", "").strip()
     if len(tag) > MAX_TAG:
         raise HTTPException(status_code=400, detail="标签太长了")
     return {

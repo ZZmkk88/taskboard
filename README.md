@@ -4,7 +4,7 @@
 
 设计上学习了开源社区看板类工具的通行思路（看板分列、卡片流转），代码由本项目独立编写；来源与署名见 [UPSTREAM.md](UPSTREAM.md)。
 
-## 功能清单（均已实现并通过测试）
+## 功能清单（均已实现；后端接口有 15 项自动化测试覆盖，前端拖拽、到期高亮、确认框等界面交互靠页面验证）
 
 - **登录**：单用户登录，登录令牌 24 小时有效；默认账号 `admin` / `admin123`，首次登录会提示修改密码，可在页面右上角改密。
 - **看板**：可建多个看板（顶部标签页切换），支持新建、改名、删除；新建看板自带「待办 / 进行中 / 已完成」三列。
@@ -51,8 +51,8 @@ python app.py
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q        # 15 项自动化测试
-python tests/live_selftest.py     # 真服务自测：起真服务走一遍完整流程，16 个检查点
+python -m pytest tests/ -q        # 15 项自动化测试（后端接口）
+python tests/live_selftest.py     # 真服务自测：起真服务走一遍主流程（建看板→建卡→移动→归档→恢复），16 个检查点
 ```
 
 Windows PowerShell 把 `python` 换成 `.venv\Scripts\python` 即可，其余相同。

@@ -407,7 +407,7 @@ document.getElementById("btnArchived").addEventListener("click", async ()=>{
 });
 
 /* ---------------- boot ---------------- */
-(async()=>{ if(token){ try{ await api("/api/me"); await enterApp(); }catch(e){ logoutLocal(); } } })();
+(async()=>{ if(token){ try{ const me=await api("/api/me"); if(me.must_change_password) toast("你还在用默认密码，点右上角「改密码」换一个吧"); await enterApp(); }catch(e){ logoutLocal(); } } })();
 </script>
 </body>
 </html>
