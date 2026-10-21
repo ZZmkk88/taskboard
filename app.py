@@ -124,6 +124,11 @@ def hash_password(password: str, salt_hex: str) -> str:
     ).hex()
 
 
+# 用户不存在时的时序填充：固定哑盐+哑哈希，让"用户不存在"和"密码错误"耗时一致
+_DUMMY_SALT = "0" * 32
+_DUMMY_HASH = hash_password("dummy-password", _DUMMY_SALT)
+
+
 def init_db() -> None:
     conn = get_db()
     try:
@@ -230,7 +235,11 @@ def login(body: LoginIn):
         user = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username.strip(),)
         ).fetchone()
-        if not user or not secrets.compare_digest(
+        if not user:
+            # 用户不存在时也做一次等长哈希，避免用响应时序区分"用户不存在"和"密码错误"
+            secrets.compare_digest(hash_password(body.password, _DUMMY_SALT), _DUMMY_HASH)
+            raise HTTPException(status_code=401, detail="用户名或密码不正确")
+        if not secrets.compare_digest(
             hash_password(body.password, user["salt"]), user["password_hash"]
         ):
             raise HTTPException(status_code=401, detail="用户名或密码不正确")
