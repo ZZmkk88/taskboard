@@ -33,7 +33,16 @@ DEFAULT_COLUMNS = ["待办", "进行中", "已完成"]
 TAG_COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"]
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-app = FastAPI(title="taskboard")
+app = FastAPI(title="taskboard", docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -781,4 +790,4 @@ def index():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8000")))
