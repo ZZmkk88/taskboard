@@ -41,9 +41,10 @@ python app.py
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TASKBOARD_DB_PATH` | `data/taskboard.db` | 数据库文件位置 |
+| `TASKBOARD_DB_PATH` | `data/taskboard.db`（相对 app.py 所在目录） | 数据库文件位置 |
 | `TB_INITIAL_USERNAME` | `admin` | 首次启动时创建的管理员用户名（库里已有用户后改此变量无效） |
 | `TB_INITIAL_PASSWORD` | `admin123` | 首次启动时创建的管理员密码 |
+| `TASKBOARD_HOST` | `127.0.0.1` | 监听地址：默认只允许本机访问；设为 `0.0.0.0` 后局域网内其他设备可访问 |
 | `PORT` | `8000` | 服务端口 |
 
 ## 测试

@@ -231,9 +231,14 @@ document.getElementById("btnAddColumn").addEventListener("click", ()=>{
 });
 
 /* ---------------- board rendering ---------------- */
+function localDay(){
+  const d=new Date();
+  const m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  return d.getFullYear()+"-"+m+"-"+dd;
+}
 function dueChip(card){
   if(!card.due_date) return "";
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDay();
   let cls="due", label="📅 "+card.due_date.slice(5);
   if(card.due_date<today){ cls+=" overdue"; label="⚠ 已逾期 "+card.due_date.slice(5); }
   else if(card.due_date===today){ cls+=" today"; label="📅 今天到期"; }
@@ -331,7 +336,13 @@ async function columnAction(colId,act){
       try{ await put("/api/columns/"+colId,{title:val("rcTitle")}); closeModal(); await refresh(); }catch(ex){ toast(ex.message); }
     };
   } else if(act==="del"){
-    if(!confirm(`确定删除列「${col.title}」吗？列里的 ${col.cards.length} 张卡片会一起删掉。`)) return;
+    let archived = 0;
+    try {
+      const items = await api(`/api/boards/${current.id}/archived`);
+      archived = items.filter(k => k.column_id === colId).length;
+    } catch(ex) { toast(ex.message); return; }
+    const extra = archived ? `，另有 ${archived} 张已归档卡片也会删除` : "";
+    if(!confirm(`确定删除列「${col.title}」吗？列里的 ${col.cards.length} 张未归档卡片会一起删掉${extra}。`)) return;
     try{ await del("/api/columns/"+colId); await refresh(); toast("列已删除"); }catch(ex){ toast(ex.message); }
   } else if(act==="left"||act==="right"){
     const j = act==="left"? ci-1 : ci+1;

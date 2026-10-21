@@ -11,6 +11,7 @@ import re
 import secrets
 import sqlite3
 import time
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -23,6 +24,7 @@ DB_PATH = os.environ.get("TASKBOARD_DB_PATH", str(BASE_DIR / "data" / "taskboard
 TOKEN_TTL_SECONDS = 24 * 60 * 60
 INITIAL_USERNAME = os.environ.get("TB_INITIAL_USERNAME", "admin")
 INITIAL_PASSWORD = os.environ.get("TB_INITIAL_PASSWORD", "admin123")
+HOST = os.environ.get("TASKBOARD_HOST", "127.0.0.1")
 
 MAX_BOARD_NAME = 100
 MAX_COLUMN_TITLE = 100
@@ -33,7 +35,22 @@ DEFAULT_COLUMNS = ["待办", "进行中", "已完成"]
 TAG_COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"]
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-app = FastAPI(title="taskboard")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="taskboard", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +173,6 @@ def init_db() -> None:
         conn.close()
 
 
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
 
 
 # ---------------------------------------------------------------------------
@@ -781,4 +795,4 @@ def index():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    uvicorn.run(app, host=HOST, port=int(os.environ.get("PORT", "8000")))
