@@ -51,7 +51,7 @@ python app.py
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q        # 14 项自动化测试
+python -m pytest tests/ -q        # 15 项自动化测试
 python tests/live_selftest.py     # 真服务自测：起真服务走一遍完整流程，16 个检查点
 ```
 

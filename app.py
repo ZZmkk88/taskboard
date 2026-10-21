@@ -31,6 +31,7 @@ MAX_COLUMN_TITLE = 100
 MAX_CARD_TITLE = 200
 MAX_CARD_DESC = 5000
 MAX_TAG = 30
+MAX_PASSWORD = 1024
 DEFAULT_COLUMNS = ["待办", "进行中", "已完成"]
 TAG_COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "pink"]
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -41,7 +42,13 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="taskboard", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(
+    title="taskboard",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    lifespan=lifespan,
+)
 
 
 @app.middleware("http")
@@ -210,13 +217,17 @@ def current_user(request: Request) -> sqlite3.Row:
 
 @app.post("/api/login")
 def login(body: LoginIn):
+    if len(body.password) > MAX_PASSWORD:
+        raise HTTPException(status_code=400, detail="密码太长了")
     init_db()
     conn = get_db()
     try:
         user = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username.strip(),)
         ).fetchone()
-        if not user or hash_password(body.password, user["salt"]) != user["password_hash"]:
+        if not user or not secrets.compare_digest(
+            hash_password(body.password, user["salt"]), user["password_hash"]
+        ):
             raise HTTPException(status_code=401, detail="用户名或密码不正确")
         token = secrets.token_urlsafe(32)
         conn.execute(
@@ -256,7 +267,13 @@ def _bearer_token(request: Request) -> str:
 def change_password(body: ChangePasswordIn, request: Request, user: sqlite3.Row = Depends(current_user)):
     if len(body.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码至少 6 位")
-    if hash_password(body.old_password, user["salt"]) != user["password_hash"]:
+    if len(body.new_password) > MAX_PASSWORD:
+        raise HTTPException(status_code=400, detail="新密码太长了")
+    if len(body.old_password) > MAX_PASSWORD:
+        raise HTTPException(status_code=400, detail="旧密码太长了")
+    if not secrets.compare_digest(
+        hash_password(body.old_password, user["salt"]), user["password_hash"]
+    ):
         raise HTTPException(status_code=400, detail="旧密码不正确")
     salt = secrets.token_hex(16)
     current_token = _bearer_token(request)
@@ -690,6 +707,10 @@ def delete_card(card_id: int, user: sqlite3.Row = Depends(current_user)):
         conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))
         if was_active:
             _repack_positions(conn, column_id)
+        col = conn.execute(
+            "SELECT board_id FROM board_columns WHERE id = ?", (column_id,)
+        ).fetchone()
+        _touch_board(conn, col["board_id"])
         conn.commit()
         return {"ok": True}
     finally:
@@ -748,6 +769,10 @@ def archive_card(card_id: int, user: sqlite3.Row = Depends(current_user)):
             (iso(utcnow()), card_id),
         )
         _repack_positions(conn, card["column_id"])
+        col = conn.execute(
+            "SELECT board_id FROM board_columns WHERE id = ?", (card["column_id"],)
+        ).fetchone()
+        _touch_board(conn, col["board_id"])
         conn.commit()
         row = conn.execute("SELECT * FROM cards WHERE id = ?", (card_id,)).fetchone()
         return _card_out(conn, row)
@@ -771,6 +796,10 @@ def restore_card(card_id: int, user: sqlite3.Row = Depends(current_user)):
             "UPDATE cards SET is_archived = 0, position = ?, updated_at = ? WHERE id = ?",
             (row["p"], iso(utcnow()), card_id),
         )
+        col = conn.execute(
+            "SELECT board_id FROM board_columns WHERE id = ?", (card["column_id"],)
+        ).fetchone()
+        _touch_board(conn, col["board_id"])
         conn.commit()
         new_row = conn.execute(
             "SELECT * FROM cards WHERE id = ?", (card_id,)
